@@ -1,57 +1,78 @@
-extern crate glutin_window;
-extern crate graphics;
-extern crate opengl_graphics;
-extern crate piston;
-
 mod digits;
+mod sounds;
 mod sprites;
 
+use crate::game::sounds::Sound;
+use crate::game::sounds::Sounds;
 use crate::game::sprites::SpriteData;
-use crate::piston::AdvancedWindow;
-use glutin_window::GlutinWindow as Window;
-use graphics::Graphics;
-use opengl_graphics::{GlGraphics, OpenGL};
-use piston::event_loop::{EventSettings, Events};
-use piston::input::{RenderArgs, RenderEvent, UpdateArgs, UpdateEvent};
-use piston::window::WindowSettings;
+use ggez::event::EventHandler;
+use ggez::graphics::set_window_title;
+use ggez::input::keyboard::{KeyCode, KeyMods};
+use ggez::nalgebra as na;
+use ggez::{graphics, timer, Context, GameResult};
 use rand::prelude::*;
+use rodio::Source;
 
 pub struct Game {
-    graphics: GlGraphics,
     sprites: SpriteData,
     rng: ThreadRng,
-    pub sound_device: rodio::Device,
+    sound_device: rodio::Device,
+    sounds: Sounds,
 }
 
 impl Game {
-    pub fn new(gl: GlGraphics) -> Self {
-        Game {
-            graphics: gl,
-            sprites: SpriteData::new(1),
+    pub fn new(ctx: &mut Context) -> GameResult<Self> {
+        Ok(Game {
+            sprites: SpriteData::new(ctx, 1)?,
             rng: rand::thread_rng(),
             sound_device: rodio::default_output_device().unwrap(),
-        }
+            sounds: Sounds::new(),
+        })
     }
 
-    pub fn render(&mut self, args: &RenderArgs) {
-        use graphics::*;
+    fn play_sound(&self, sound: Sound) {
+        let sound_to_play = match sound {
+            Sound::ButtonPress => &self.sounds.button_press,
+            Sound::Hit => &self.sounds.hit,
+            Sound::ScoreReached => &self.sounds.score_reached,
+        };
 
+        let cursor_clone = sound_to_play.clone();
+        let source = rodio::Decoder::new(cursor_clone).unwrap().convert_samples();
+        rodio::play_raw(&self.sound_device, source);
+    }
+}
+
+impl EventHandler for Game {
+    fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
+        let fps = timer::fps(ctx);
+        set_window_title(ctx, &format!("Dino Game - {:.1} FPS", fps));
+        Ok(())
+    }
+    fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
         const BG_DAY: [f32; 4] = [247.0 / 255.0, 247.0 / 255.0, 247.0 / 255.0, 1.0];
 
-        let sprites = &self.sprites;
-        let rng = &mut self.rng;
+        graphics::clear(ctx, BG_DAY.into());
+        let random_index = (self.rng.gen::<f64>() * 10.0) as usize;
+        let position = na::Point2::new(100.0, 100.0);
+        graphics::draw(ctx, &self.sprites.digits[random_index], (position,))?;
 
-        self.graphics.draw(args.viewport(), |c, gl| {
-            clear(BG_DAY, gl);
-
-            let transform = c.transform.trans_pos([100.0, 100.0]);
-
-            let image = Image::new();
-
-            let random_index = (rng.gen::<f64>() * 10.0) as usize;
-            image.draw(&sprites.digits[random_index], &c.draw_state, transform, gl);
-        });
+        graphics::present(ctx)?;
+        Ok(())
     }
 
-    pub fn update(&mut self, args: &UpdateArgs) {}
+    fn key_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        keycode: KeyCode,
+        _keymods: KeyMods,
+        _repeat: bool,
+    ) {
+        match keycode {
+            KeyCode::Space => self.play_sound(Sound::Hit),
+            KeyCode::Return => self.play_sound(Sound::ButtonPress),
+            KeyCode::RShift => self.play_sound(Sound::ScoreReached),
+            _ => (),
+        };
+    }
 }
