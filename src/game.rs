@@ -1,4 +1,5 @@
 mod digits;
+mod helpers;
 mod sounds;
 mod sprites;
 
@@ -28,8 +29,10 @@ fn clamp_position_speed(
     max_size: &[f32; 2],
     position: &mut na::Point2<f32>,
     velocity: &mut na::Vector2<f32>,
-) {
+) -> bool {
     let [max_width, max_height] = max_size;
+
+    let mut changed_outer = false;
 
     loop {
         let mut changed = false;
@@ -57,10 +60,14 @@ fn clamp_position_speed(
             changed = true;
         }
 
-        if !changed {
+        if changed {
+            changed_outer = true;
+        } else {
             break;
         }
     }
+
+    changed_outer
 }
 
 impl Game {
@@ -98,21 +105,43 @@ impl EventHandler for Game {
         let shift = self.velocity.scale(dt.as_micros() as f32 / 1000000.0);
 
         self.position = self.position + shift;
-        clamp_position_speed(&[631.0, 469.0], &mut self.position, &mut self.velocity);
+        if clamp_position_speed(
+            &[
+                640.0 - self.sprites.dino.width() as f32,
+                480.0 - self.sprites.dino.height() as f32,
+            ],
+            &mut self.position,
+            &mut self.velocity,
+        ) {
+            self.play_sound(Sound::Hit);
+        }
 
         Ok(())
     }
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
         const BG_DAY: [f32; 4] = [247.0 / 255.0, 247.0 / 255.0, 247.0 / 255.0, 1.0];
-        const BG_BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+        // const BG_BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
         graphics::clear(ctx, BG_DAY.into());
         graphics::draw(
             ctx,
-            &self.sprites.digits[self.current_index],
+            //&self.sprites.digits[self.current_index],
+            &self.sprites.dino,
             (self.position,),
         )?;
 
+        /*
+        graphics::draw(
+            ctx,
+            &self.sprites.dino,
+            (na::Point2::new(
+                320.0 - self.sprites.dino.width() as f32 / 2.0,
+                240.0 - self.sprites.dino.height() as f32 / 2.0,
+            ),),
+        )?;
+        */
+
+        /*
         let mesh_builder = &mut graphics::MeshBuilder::new();
 
         for x in 0..=640 {
@@ -147,6 +176,7 @@ impl EventHandler for Game {
 
         let mesh = mesh_builder.build(ctx)?;
         graphics::draw(ctx, &mesh, (na::Point2::origin(),))?;
+        */
 
         graphics::present(ctx)?;
         Ok(())
