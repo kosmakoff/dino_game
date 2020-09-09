@@ -1,4 +1,3 @@
-mod digits;
 mod helpers;
 mod sounds;
 mod sprites;
@@ -17,69 +16,22 @@ use rodio::Source;
 
 pub struct Game {
     sprites: SpriteData,
-    _rng: ThreadRng,
+    rng: ThreadRng,
     sound_device: rodio::Device,
     sounds: Sounds,
-    current_index: usize,
-    position: na::Point2<f32>,
-    velocity: na::Vector2<f32>,
-}
-
-fn clamp_position_speed(
-    max_size: &[f32; 2],
-    position: &mut na::Point2<f32>,
-    velocity: &mut na::Vector2<f32>,
-) -> bool {
-    let [max_width, max_height] = max_size;
-
-    let mut changed_outer = false;
-
-    loop {
-        let mut changed = false;
-        if position.x < 0.0 {
-            position.x = -position.x;
-            velocity.x = -velocity.x;
-            changed = true;
-        }
-
-        if position.y < 0.0 {
-            position.y = -position.y;
-            velocity.y = -velocity.y;
-            changed = true;
-        }
-
-        if position.x >= *max_width {
-            position.x = *max_width * 2.0 - position.x;
-            velocity.x = -velocity.x;
-            changed = true;
-        }
-
-        if position.y >= *max_height {
-            position.y = *max_height * 2.0 - position.y;
-            velocity.y = -velocity.y;
-            changed = true;
-        }
-
-        if changed {
-            changed_outer = true;
-        } else {
-            break;
-        }
-    }
-
-    changed_outer
+    step: bool,
+    timer: u128,
 }
 
 impl Game {
     pub fn new(ctx: &mut Context) -> GameResult<Self> {
         Ok(Game {
             sprites: SpriteData::new(ctx, 1)?,
-            _rng: rand::thread_rng(),
+            rng: rand::thread_rng(),
             sound_device: rodio::default_output_device().unwrap(),
             sounds: Sounds::new(),
-            current_index: 0,
-            position: na::Point2::new(0.0, 0.0),
-            velocity: na::Vector2::new(64.0, 64.0),
+            step: false,
+            timer: 0,
         })
     }
 
@@ -102,18 +54,12 @@ impl EventHandler for Game {
         set_window_title(ctx, &format!("Dino Game - {:.1} FPS", fps));
 
         let dt = timer::delta(ctx);
-        let shift = self.velocity.scale(dt.as_micros() as f32 / 1000000.0);
+        let dt_micros = dt.as_micros();
+        self.timer += dt_micros;
 
-        self.position = self.position + shift;
-        if clamp_position_speed(
-            &[
-                640.0 - self.sprites.dino.width() as f32,
-                480.0 - self.sprites.dino.height() as f32,
-            ],
-            &mut self.position,
-            &mut self.velocity,
-        ) {
-            self.play_sound(Sound::Hit);
+        if self.timer >= 100_000 {
+            self.timer -= 100_000;
+            self.step = !self.step;
         }
 
         Ok(())
@@ -123,23 +69,46 @@ impl EventHandler for Game {
         // const BG_BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
         graphics::clear(ctx, BG_DAY.into());
+
+        // 24,25
+        // 35,36
+
         graphics::draw(
             ctx,
-            //&self.sprites.digits[self.current_index],
-            &self.sprites.dino,
-            (self.position,),
+            self.sprites.ground.get_tile(24),
+            (na::Point2::new(100.0, 283.0),),
         )?;
 
-        /*
         graphics::draw(
             ctx,
-            &self.sprites.dino,
-            (na::Point2::new(
-                320.0 - self.sprites.dino.width() as f32 / 2.0,
-                240.0 - self.sprites.dino.height() as f32 / 2.0,
-            ),),
+            self.sprites.ground.get_tile(25),
+            (na::Point2::new(130.0, 283.0),),
         )?;
-        */
+
+        graphics::draw(
+            ctx,
+            self.sprites.ground.get_tile(2),
+            (na::Point2::new(160.0, 283.0),),
+        )?;
+
+        graphics::draw(
+            ctx,
+            self.sprites.ground.get_tile(35),
+            (na::Point2::new(190.0, 283.0),),
+        )?;
+
+        graphics::draw(
+            ctx,
+            self.sprites.ground.get_tile(36),
+            (na::Point2::new(220.0, 283.0),),
+        )?;
+
+        let image = match self.step {
+            true => &self.sprites.dino.walk1,
+            false => &self.sprites.dino.walk2,
+        };
+
+        graphics::draw(ctx, image, (na::Point2::new(100.0, 250.0),))?;
 
         /*
         let mesh_builder = &mut graphics::MeshBuilder::new();

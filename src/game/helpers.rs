@@ -1,5 +1,5 @@
 use ggez::error::GameResult;
-use ggez::graphics::Image;
+use ggez::graphics::{FilterMode, Image};
 use ggez::Context;
 use image::{DynamicImage, GenericImageView};
 
@@ -17,5 +17,8 @@ pub fn get_image(
         .to_image()
         .to_vec();
 
-    Image::from_rgba8(ctx, width as u16, height as u16, &one_character_image)
+    let mut image = Image::from_rgba8(ctx, width as u16, height as u16, &one_character_image)?;
+    image.set_filter(FilterMode::Nearest);
+
+    Ok(image)
 }
