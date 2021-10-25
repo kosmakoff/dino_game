@@ -1,65 +1,98 @@
-mod helpers;
-mod sounds;
-mod sprites;
+mod assets;
+mod context;
+mod event;
+mod objects;
 
-use crate::game::sounds::Sound;
-use crate::game::sounds::Sounds;
-use crate::game::sprites::SpriteData;
+use crate::game::assets::sounds::Sound;
+use crate::game::assets::sprites::tile::Tile;
+use crate::game::assets::Assets;
+use crate::game::objects::dino::Dino;
+use ggez::audio::SoundSource;
 use ggez::event::quit;
 use ggez::event::EventHandler;
 use ggez::graphics::set_window_title;
+use ggez::graphics::DrawParam;
 use ggez::input::keyboard::{KeyCode, KeyMods};
-use ggez::nalgebra as na;
 use ggez::{graphics, timer, Context, GameResult};
-use rand::prelude::*;
-use rodio::Source;
+use oorandom::Rand32;
+
+const MAX_JUMP_HEIGHT: f32 = 101.0;
+const JUMP_DURATION: f32 = 0.28;
+
+const JUMP_VELOCITY: f32 = 2.0 * MAX_JUMP_HEIGHT / JUMP_DURATION;
+const GRAVITY: f32 = JUMP_VELOCITY / JUMP_DURATION;
 
 pub struct Game {
-    sprites: SpriteData,
-    rng: ThreadRng,
-    sound_device: rodio::Device,
-    sounds: Sounds,
+    assets: Assets,
+    scale: [f32; 2],
+    dino: Dino,
+    rng: Rand32,
     step: bool,
     timer: u128,
+    position_vertical: f32,
+    speed_vertical: f32,
 }
 
 impl Game {
     pub fn new(ctx: &mut Context) -> GameResult<Self> {
+        let assets = Assets::new(ctx)?;
+        let mut seed: [u8; 8] = [0; 8];
+        getrandom::getrandom(&mut seed[..]).expect("Could not create RNG seed");
+        let mut rng = Rand32::new(u64::from_ne_bytes(seed));
         Ok(Game {
-            sprites: SpriteData::new(ctx, 1)?,
-            rng: rand::thread_rng(),
-            sound_device: rodio::default_output_device().unwrap(),
-            sounds: Sounds::new(),
+            assets: assets,
+            scale: [2.0, 2.0],
+            dino: Dino::new(),
+            rng,
             step: false,
             timer: 0,
+            position_vertical: 0.0,
+            speed_vertical: 0.0,
         })
     }
 
-    fn play_sound(&self, sound: Sound) {
+    fn play_sound(&mut self, ctx: &Context, sound: Sound) {
         let sound_to_play = match sound {
-            Sound::ButtonPress => &self.sounds.button_press,
-            Sound::Hit => &self.sounds.hit,
-            Sound::ScoreReached => &self.sounds.score_reached,
+            Sound::ButtonPress => &mut self.assets.sounds.button_press,
+            Sound::Hit => &mut self.assets.sounds.hit,
+            Sound::ScoreReached => &mut self.assets.sounds.score_reached,
         };
 
-        let cursor_clone = sound_to_play.clone();
-        let source = rodio::Decoder::new(cursor_clone).unwrap().convert_samples();
-        rodio::play_raw(&self.sound_device, source);
+        let _ = sound_to_play.play(ctx);
     }
 }
 
-impl EventHandler for Game {
+fn make_draw_param(tile: &Tile, scale: [f32; 2], dest: [f32; 2]) -> DrawParam {
+    let [scale_x, scale_y] = scale;
+    let [dest_x, dest_y] = dest;
+
+    DrawParam::default()
+        .src(tile.into())
+        .scale(scale)
+        .dest([dest_x * scale_x, dest_y * scale_y])
+}
+
+impl EventHandler<ggez::GameError> for Game {
     fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
         let fps = timer::fps(ctx);
         set_window_title(ctx, &format!("Dino Game - {:.1} FPS", fps));
 
         let dt = timer::delta(ctx);
         let dt_micros = dt.as_micros();
+        let dt_float = dt.as_secs_f32();
         self.timer += dt_micros;
 
         if self.timer >= 100_000 {
             self.timer -= 100_000;
             self.step = !self.step;
+        }
+
+        // set speed
+        self.speed_vertical += dt_float * GRAVITY;
+        self.position_vertical += dt_float * self.speed_vertical;
+        if self.position_vertical > 0.0 {
+            self.position_vertical = 0.0;
+            self.speed_vertical = 0.0;
         }
 
         Ok(())
@@ -75,40 +108,68 @@ impl EventHandler for Game {
 
         graphics::draw(
             ctx,
-            self.sprites.ground.get_tile(24),
-            (na::Point2::new(100.0, 283.0),),
+            &self.assets.sprites.sprite_sheet,
+            make_draw_param(
+                self.assets.sprites.ground.get_tile(24),
+                self.scale,
+                [100.0, 283.0],
+            ),
         )?;
 
         graphics::draw(
             ctx,
-            self.sprites.ground.get_tile(25),
-            (na::Point2::new(130.0, 283.0),),
+            &self.assets.sprites.sprite_sheet,
+            make_draw_param(
+                self.assets.sprites.ground.get_tile(25),
+                self.scale,
+                [130.0, 283.0],
+            ),
         )?;
 
         graphics::draw(
             ctx,
-            self.sprites.ground.get_tile(2),
-            (na::Point2::new(160.0, 283.0),),
+            &self.assets.sprites.sprite_sheet,
+            make_draw_param(
+                self.assets.sprites.ground.get_tile(2),
+                self.scale,
+                [160.0, 283.0],
+            ),
         )?;
 
         graphics::draw(
             ctx,
-            self.sprites.ground.get_tile(35),
-            (na::Point2::new(190.0, 283.0),),
+            &self.assets.sprites.sprite_sheet,
+            make_draw_param(
+                self.assets.sprites.ground.get_tile(35),
+                self.scale,
+                [190.0, 283.0],
+            ),
         )?;
 
         graphics::draw(
             ctx,
-            self.sprites.ground.get_tile(36),
-            (na::Point2::new(220.0, 283.0),),
+            &self.assets.sprites.sprite_sheet,
+            make_draw_param(
+                self.assets.sprites.ground.get_tile(36),
+                self.scale,
+                [220.0, 283.0],
+            ),
         )?;
 
-        let image = match self.step {
-            true => &self.sprites.dino.walk1,
-            false => &self.sprites.dino.walk2,
+        let walk_tile = match self.step {
+            true => &self.assets.sprites.dino.walk1,
+            false => &self.assets.sprites.dino.walk2,
         };
 
-        graphics::draw(ctx, image, (na::Point2::new(100.0, 250.0),))?;
+        graphics::draw(
+            ctx,
+            &self.assets.sprites.sprite_sheet,
+            make_draw_param(
+                walk_tile,
+                self.scale,
+                [100.0, 250.0 + self.position_vertical],
+            ),
+        )?;
 
         /*
         let mesh_builder = &mut graphics::MeshBuilder::new();
@@ -159,9 +220,13 @@ impl EventHandler for Game {
         _repeat: bool,
     ) {
         match keycode {
-            KeyCode::Space => self.play_sound(Sound::Hit),
-            KeyCode::Return => self.play_sound(Sound::ButtonPress),
-            KeyCode::RShift => self.play_sound(Sound::ScoreReached),
+            KeyCode::Space => {
+                // start jump
+                self.play_sound(ctx, Sound::ButtonPress);
+                self.speed_vertical = -JUMP_VELOCITY;
+            }
+            // KeyCode::Return => self.play_sound(Sound::ButtonPress),
+            // KeyCode::RShift => self.play_sound(Sound::ScoreReached),
             KeyCode::Escape => quit(ctx),
             _ => (),
         };
