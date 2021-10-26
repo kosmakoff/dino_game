@@ -1,6 +1,4 @@
 mod assets;
-mod context;
-mod event;
 mod objects;
 
 use crate::game::assets::sounds::Sound;
@@ -24,13 +22,19 @@ const GRAVITY: f32 = JUMP_VELOCITY / JUMP_DURATION;
 
 pub struct Game {
     assets: Assets,
-    scale: [f32; 2],
     dino: Dino,
     rng: Rand32,
     step: bool,
-    timer: u128,
     position_vertical: f32,
     speed_vertical: f32,
+    screen_width: f32,
+    screen_height: f32,
+    screen_scale: [f32; 2],
+}
+
+pub struct DrawContext {
+    pub screen_size: [f32; 2],
+    pub screen_scale: [f32; 2],
 }
 
 impl Game {
@@ -38,17 +42,26 @@ impl Game {
         let assets = Assets::new(ctx)?;
         let mut seed: [u8; 8] = [0; 8];
         getrandom::getrandom(&mut seed[..]).expect("Could not create RNG seed");
-        let mut rng = Rand32::new(u64::from_ne_bytes(seed));
+        let rng = Rand32::new(u64::from_ne_bytes(seed));
+        let (width, height) = graphics::drawable_size(ctx);
         Ok(Game {
             assets: assets,
-            scale: [2.0, 2.0],
             dino: Dino::new(),
             rng,
             step: false,
-            timer: 0,
             position_vertical: 0.0,
             speed_vertical: 0.0,
+            screen_width: width,
+            screen_height: height,
+            screen_scale: [2.0, 2.0],
         })
+    }
+
+    fn get_draw_context(&self) -> DrawContext {
+        DrawContext {
+            screen_size: [self.screen_width, self.screen_height],
+            screen_scale: self.screen_scale,
+        }
     }
 
     fn play_sound(&mut self, ctx: &Context, sound: Sound) {
@@ -77,23 +90,15 @@ impl EventHandler<ggez::GameError> for Game {
         let fps = timer::fps(ctx);
         set_window_title(ctx, &format!("Dino Game - {:.1} FPS", fps));
 
-        let dt = timer::delta(ctx);
-        let dt_micros = dt.as_micros();
-        let dt_float = dt.as_secs_f32();
-        self.timer += dt_micros;
+        self.dino.update(ctx);
 
-        if self.timer >= 100_000 {
-            self.timer -= 100_000;
-            self.step = !self.step;
-        }
-
-        // set speed
-        self.speed_vertical += dt_float * GRAVITY;
-        self.position_vertical += dt_float * self.speed_vertical;
-        if self.position_vertical > 0.0 {
-            self.position_vertical = 0.0;
-            self.speed_vertical = 0.0;
-        }
+        // // set speed
+        // self.speed_vertical += dt_float * GRAVITY;
+        // self.position_vertical += dt_float * self.speed_vertical;
+        // if self.position_vertical > 0.0 {
+        //     self.position_vertical = 0.0;
+        //     self.speed_vertical = 0.0;
+        // }
 
         Ok(())
     }
@@ -101,17 +106,17 @@ impl EventHandler<ggez::GameError> for Game {
         const BG_DAY: [f32; 4] = [247.0 / 255.0, 247.0 / 255.0, 247.0 / 255.0, 1.0];
         // const BG_BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
+        let draw_context = self.get_draw_context();
+
         graphics::clear(ctx, BG_DAY.into());
 
-        // 24,25
-        // 35,36
-
+        // draw ground
         graphics::draw(
             ctx,
             &self.assets.sprites.sprite_sheet,
             make_draw_param(
                 self.assets.sprites.ground.get_tile(24),
-                self.scale,
+                self.screen_scale,
                 [100.0, 283.0],
             ),
         )?;
@@ -121,7 +126,7 @@ impl EventHandler<ggez::GameError> for Game {
             &self.assets.sprites.sprite_sheet,
             make_draw_param(
                 self.assets.sprites.ground.get_tile(25),
-                self.scale,
+                self.screen_scale,
                 [130.0, 283.0],
             ),
         )?;
@@ -131,7 +136,7 @@ impl EventHandler<ggez::GameError> for Game {
             &self.assets.sprites.sprite_sheet,
             make_draw_param(
                 self.assets.sprites.ground.get_tile(2),
-                self.scale,
+                self.screen_scale,
                 [160.0, 283.0],
             ),
         )?;
@@ -141,7 +146,7 @@ impl EventHandler<ggez::GameError> for Game {
             &self.assets.sprites.sprite_sheet,
             make_draw_param(
                 self.assets.sprites.ground.get_tile(35),
-                self.scale,
+                self.screen_scale,
                 [190.0, 283.0],
             ),
         )?;
@@ -151,25 +156,13 @@ impl EventHandler<ggez::GameError> for Game {
             &self.assets.sprites.sprite_sheet,
             make_draw_param(
                 self.assets.sprites.ground.get_tile(36),
-                self.scale,
+                self.screen_scale,
                 [220.0, 283.0],
             ),
         )?;
 
-        let walk_tile = match self.step {
-            true => &self.assets.sprites.dino.walk1,
-            false => &self.assets.sprites.dino.walk2,
-        };
-
-        graphics::draw(
-            ctx,
-            &self.assets.sprites.sprite_sheet,
-            make_draw_param(
-                walk_tile,
-                self.scale,
-                [100.0, 250.0 + self.position_vertical],
-            ),
-        )?;
+        // draw dino
+        self.dino.draw(ctx, &self.assets, &draw_context)?;
 
         /*
         let mesh_builder = &mut graphics::MeshBuilder::new();
