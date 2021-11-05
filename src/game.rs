@@ -11,6 +11,7 @@ use ggez::event::EventHandler;
 use ggez::graphics::set_window_title;
 use ggez::graphics::DrawParam;
 use ggez::input::keyboard::{KeyCode, KeyMods};
+use ggez::GameError;
 use ggez::{graphics, timer, Context, GameResult};
 use oorandom::Rand32;
 
@@ -24,9 +25,6 @@ pub struct Game {
     assets: Assets,
     dino: Dino,
     rng: Rand32,
-    step: bool,
-    position_vertical: f32,
-    speed_vertical: f32,
     screen_width: f32,
     screen_height: f32,
     screen_scale: [f32; 2],
@@ -37,20 +35,31 @@ pub struct DrawContext {
     pub screen_scale: [f32; 2],
 }
 
+fn create_rng() -> GameResult<Rand32> {
+    let mut seed: [u8; 8] = [0; 8];
+    match getrandom::getrandom(&mut seed[..]) {
+        Ok(_) => (),
+        Err(error) => {
+            return Err(GameError::CustomError(format!(
+                "Failed to initialize the RNG: {}",
+                error
+            )))
+        }
+    };
+    let rng = Rand32::new(u64::from_ne_bytes(seed));
+    Ok(rng)
+}
+
 impl Game {
     pub fn new(ctx: &mut Context) -> GameResult<Self> {
         let assets = Assets::new(ctx)?;
-        let mut seed: [u8; 8] = [0; 8];
-        getrandom::getrandom(&mut seed[..]).expect("Could not create RNG seed");
-        let rng = Rand32::new(u64::from_ne_bytes(seed));
+        let rng = create_rng()?;
         let (width, height) = graphics::drawable_size(ctx);
+
         Ok(Game {
             assets: assets,
             dino: Dino::new(),
             rng,
-            step: false,
-            position_vertical: 0.0,
-            speed_vertical: 0.0,
             screen_width: width,
             screen_height: height,
             screen_scale: [2.0, 2.0],
@@ -209,14 +218,15 @@ impl EventHandler<ggez::GameError> for Game {
         &mut self,
         ctx: &mut Context,
         keycode: KeyCode,
-        _keymods: KeyMods,
-        _repeat: bool,
+        keymods: KeyMods,
+        repeat: bool,
     ) {
+        self.dino.key_down_event(ctx, keycode, keymods, repeat);
+
         match keycode {
             KeyCode::Space => {
                 // start jump
                 self.play_sound(ctx, Sound::ButtonPress);
-                self.speed_vertical = -JUMP_VELOCITY;
             }
             // KeyCode::Return => self.play_sound(Sound::ButtonPress),
             // KeyCode::RShift => self.play_sound(Sound::ScoreReached),

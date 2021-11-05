@@ -1,7 +1,5 @@
 use crate::game::assets::sprites::tile::Tile;
-use ggez::graphics::Image;
-use ggez::{Context, GameResult};
-use image::DynamicImage;
+use ggez::GameResult;
 use std::mem::{self, MaybeUninit};
 
 // 2x54 1200x12 ; single tile W=30 H=12
