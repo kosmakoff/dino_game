@@ -1,13 +1,9 @@
-use crate::game::make_draw_param;
-use crate::game::Assets;
-use crate::game::DrawContext;
-use crate::game::{GRAVITY, JUMP_VELOCITY};
-use ggez::graphics;
-use ggez::input::keyboard::KeyCode;
-use ggez::input::keyboard::KeyMods;
-use ggez::timer;
-use ggez::Context;
-use ggez::GameResult;
+use crate::game::{make_draw_param, Assets, DrawContext, GRAVITY, GROUND_LEVEL, JUMP_VELOCITY};
+use ggez::{
+    graphics,
+    input::keyboard::{KeyCode, KeyMods},
+    timer, Context, GameResult,
+};
 
 const BLINKING_DURATION: u128 = 100_000;
 const BLINKING_INTERVAL: u128 = 2_500_000;
@@ -41,6 +37,10 @@ impl WalkingState {
         }
     }
 
+    fn new_with_since_and_leg(since: u128, is_left_leg: bool) -> Self {
+        Self { since, is_left_leg }
+    }
+
     fn new_with_leg(is_left_leg: bool) -> Self {
         Self {
             since: 0,
@@ -50,12 +50,13 @@ impl WalkingState {
 }
 
 struct CrouchedState {
+    since: u128,
     is_left_leg: bool,
 }
 
 impl CrouchedState {
-    fn new(is_left_leg: bool) -> Self {
-        Self { is_left_leg }
+    fn new(since: u128, is_left_leg: bool) -> Self {
+        Self { since, is_left_leg }
     }
 }
 
@@ -95,6 +96,7 @@ impl Dino {
     pub fn new() -> Self {
         Dino(DinoState::new())
     }
+
     pub fn update(&mut self, ctx: &mut Context) {
         let dt = timer::delta(ctx);
         let dt_micros = dt.as_micros();
@@ -116,6 +118,7 @@ impl Dino {
             DinoState::Walking(ref mut walking) => {
                 walking.since += dt_micros;
 
+                // steps alternation
                 if walking.since >= WALKING_STEP_DURATION {
                     walking.since -= WALKING_STEP_DURATION;
                     walking.is_left_leg = !walking.is_left_leg;
@@ -132,9 +135,21 @@ impl Dino {
                     *dino_state = DinoState::Walking(walking);
                 }
             }
+
+            DinoState::Crouched(ref mut crouched) => {
+                crouched.since += dt_micros;
+
+                // steps alternation
+                if crouched.since >= WALKING_STEP_DURATION {
+                    crouched.since -= WALKING_STEP_DURATION;
+                    crouched.is_left_leg = !crouched.is_left_leg;
+                }
+            }
+
             _ => (),
         }
     }
+
     pub fn draw(
         &mut self,
         ctx: &mut Context,
@@ -145,13 +160,20 @@ impl Dino {
 
         match dino_state {
             DinoState::Idle(ref idle) => self.draw_idle(idle, ctx, assets, draw_context)?,
+
             DinoState::Walking(ref walking) => {
                 self.draw_walking(walking, ctx, assets, draw_context)?
             }
+
             DinoState::Jumping(ref jumping) => {
                 self.draw_jumping(jumping, ctx, assets, draw_context)?
             }
-            _ => (),
+
+            DinoState::Crouched(ref crouched) => {
+                self.draw_crouched(crouched, ctx, assets, draw_context)?
+            }
+
+            DinoState::Hit => self.draw_hit(ctx, assets, draw_context)?,
         };
 
         Ok(())
@@ -187,8 +209,35 @@ impl Dino {
 
                 // play sound
             }
+
+            KeyCode::Down => {
+                let Dino(ref mut dino_state) = self;
+
+                if let DinoState::Walking(ref walking_state) = dino_state {
+                    let crouched_state =
+                        CrouchedState::new(walking_state.since, walking_state.is_left_leg);
+                    *dino_state = DinoState::Crouched(crouched_state);
+                }
+            }
             _ => (),
         };
+    }
+
+    pub fn key_up_event(&mut self, _ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods) {
+        match keycode {
+            KeyCode::Down => {
+                let Dino(ref mut dino_state) = self;
+
+                if let DinoState::Crouched(ref crouched_state) = dino_state {
+                    let walking_state = WalkingState::new_with_since_and_leg(
+                        crouched_state.since,
+                        crouched_state.is_left_leg,
+                    );
+                    *dino_state = DinoState::Walking(walking_state);
+                }
+            }
+            _ => (),
+        }
     }
 
     fn draw_idle(
@@ -206,7 +255,7 @@ impl Dino {
         graphics::draw(
             ctx,
             &assets.sprites.sprite_sheet,
-            make_draw_param(idle_tile, draw_context.screen_scale, [100.0, 250.0]),
+            make_draw_param(idle_tile, draw_context.screen_scale, [100.0, GROUND_LEVEL]),
         )?;
 
         Ok(())
@@ -227,7 +276,7 @@ impl Dino {
         graphics::draw(
             ctx,
             &assets.sprites.sprite_sheet,
-            make_draw_param(walk_tile, draw_context.screen_scale, [100.0, 250.0]),
+            make_draw_param(walk_tile, draw_context.screen_scale, [100.0, GROUND_LEVEL]),
         )?;
 
         Ok(())
@@ -251,10 +300,50 @@ impl Dino {
             make_draw_param(
                 jump_tile,
                 draw_context.screen_scale,
-                [100.0, 250.0 - jumping_state.vertical_position],
+                [100.0, GROUND_LEVEL - jumping_state.vertical_position],
             ),
         )?;
 
         Ok(())
+    }
+
+    fn draw_crouched(
+        &self,
+        crouched_state: &CrouchedState,
+        ctx: &mut Context,
+        assets: &Assets,
+        draw_context: &DrawContext,
+    ) -> GameResult<()> {
+        let crouched_tile = match crouched_state.is_left_leg {
+            true => &assets.sprites.dino.crouched1,
+            false => &assets.sprites.dino.crouched2,
+        };
+
+        graphics::draw(
+            ctx,
+            &assets.sprites.sprite_sheet,
+            make_draw_param(
+                crouched_tile,
+                draw_context.screen_scale,
+                [100.0, GROUND_LEVEL],
+            ),
+        )?;
+
+        Ok(())
+    }
+
+    fn draw_hit(
+        &self,
+        ctx: &mut Context,
+        assets: &Assets,
+        draw_context: &DrawContext,
+    ) -> GameResult<()> {
+        let hit_tile = &assets.sprites.dino.hit;
+
+        graphics::draw(
+            ctx,
+            &assets.sprites.sprite_sheet,
+            make_draw_param(hit_tile, draw_context.screen_scale, [100.0, GROUND_LEVEL]),
+        )
     }
 }

@@ -5,6 +5,7 @@ use crate::game::assets::sounds::Sound;
 use crate::game::assets::sprites::tile::Tile;
 use crate::game::assets::Assets;
 use crate::game::objects::dino::Dino;
+use crate::game::objects::ground::Ground;
 use ggez::audio::SoundSource;
 use ggez::event::quit;
 use ggez::event::EventHandler;
@@ -21,9 +22,12 @@ const JUMP_DURATION: f32 = 0.28;
 const JUMP_VELOCITY: f32 = 2.0 * MAX_JUMP_HEIGHT / JUMP_DURATION;
 const GRAVITY: f32 = JUMP_VELOCITY / JUMP_DURATION;
 
+const GROUND_LEVEL: f32 = 300.0;
+
 pub struct Game {
     assets: Assets,
     dino: Dino,
+    ground: Ground,
     rng: Rand32,
     screen_width: f32,
     screen_height: f32,
@@ -59,6 +63,7 @@ impl Game {
         Ok(Game {
             assets: assets,
             dino: Dino::new(),
+            ground: Ground::new(),
             rng,
             screen_width: width,
             screen_height: height,
@@ -92,6 +97,7 @@ fn make_draw_param(tile: &Tile, scale: [f32; 2], dest: [f32; 2]) -> DrawParam {
         .src(tile.into())
         .scale(scale)
         .dest([dest_x * scale_x, dest_y * scale_y])
+        .offset([0.0, 1.0])
 }
 
 impl EventHandler<ggez::GameError> for Game {
@@ -100,14 +106,6 @@ impl EventHandler<ggez::GameError> for Game {
         set_window_title(ctx, &format!("Dino Game - {:.1} FPS", fps));
 
         self.dino.update(ctx);
-
-        // // set speed
-        // self.speed_vertical += dt_float * GRAVITY;
-        // self.position_vertical += dt_float * self.speed_vertical;
-        // if self.position_vertical > 0.0 {
-        //     self.position_vertical = 0.0;
-        //     self.speed_vertical = 0.0;
-        // }
 
         Ok(())
     }
@@ -119,96 +117,8 @@ impl EventHandler<ggez::GameError> for Game {
 
         graphics::clear(ctx, BG_DAY.into());
 
-        // draw ground
-        graphics::draw(
-            ctx,
-            &self.assets.sprites.sprite_sheet,
-            make_draw_param(
-                self.assets.sprites.ground.get_tile(24),
-                self.screen_scale,
-                [100.0, 283.0],
-            ),
-        )?;
-
-        graphics::draw(
-            ctx,
-            &self.assets.sprites.sprite_sheet,
-            make_draw_param(
-                self.assets.sprites.ground.get_tile(25),
-                self.screen_scale,
-                [130.0, 283.0],
-            ),
-        )?;
-
-        graphics::draw(
-            ctx,
-            &self.assets.sprites.sprite_sheet,
-            make_draw_param(
-                self.assets.sprites.ground.get_tile(2),
-                self.screen_scale,
-                [160.0, 283.0],
-            ),
-        )?;
-
-        graphics::draw(
-            ctx,
-            &self.assets.sprites.sprite_sheet,
-            make_draw_param(
-                self.assets.sprites.ground.get_tile(35),
-                self.screen_scale,
-                [190.0, 283.0],
-            ),
-        )?;
-
-        graphics::draw(
-            ctx,
-            &self.assets.sprites.sprite_sheet,
-            make_draw_param(
-                self.assets.sprites.ground.get_tile(36),
-                self.screen_scale,
-                [220.0, 283.0],
-            ),
-        )?;
-
-        // draw dino
+        self.ground.draw(ctx, &self.assets, &draw_context)?;
         self.dino.draw(ctx, &self.assets, &draw_context)?;
-
-        /*
-        let mesh_builder = &mut graphics::MeshBuilder::new();
-
-        for x in 0..=640 {
-            if x % 20 != 0 {
-                continue;
-            }
-
-            mesh_builder.line(
-                &[
-                    na::Point2::new(x as f32, 0.0),
-                    na::Point2::new(x as f32, 480.0),
-                ],
-                3.0,
-                BG_BLACK.into(),
-            )?;
-        }
-
-        for y in 0..=480 {
-            if y % 20 != 0 {
-                continue;
-            }
-
-            mesh_builder.line(
-                &[
-                    na::Point2::new(0.0, y as f32),
-                    na::Point2::new(640.0, y as f32),
-                ],
-                3.0,
-                BG_BLACK.into(),
-            )?;
-        }
-
-        let mesh = mesh_builder.build(ctx)?;
-        graphics::draw(ctx, &mesh, (na::Point2::origin(),))?;
-        */
 
         graphics::present(ctx)?;
         Ok(())
@@ -233,5 +143,9 @@ impl EventHandler<ggez::GameError> for Game {
             KeyCode::Escape => quit(ctx),
             _ => (),
         };
+    }
+
+    fn key_up_event(&mut self, ctx: &mut Context, keycode: KeyCode, keymods: KeyMods) {
+        self.dino.key_up_event(ctx, keycode, keymods);
     }
 }
