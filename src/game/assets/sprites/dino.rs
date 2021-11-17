@@ -23,7 +23,7 @@ impl DinoData {
         // 848,2 44,47 - first block
 
         let [normal_state_start_x, normal_state_start_y] = normal_state_start;
-        let [normal_state_size_width, normal_state_size_height] = normal_state_size;
+        let [normal_state_size_width, _] = normal_state_size;
 
         let image_idle = Tile::new(normal_state_start, normal_state_size, sprite_sheet_size);
 
@@ -64,11 +64,7 @@ impl DinoData {
         );
 
         let [crouched_state_start_x, crouched_state_start_y] = crouched_state_start;
-        let [crouched_state_size_width, crouched_state_size_height] = crouched_state_size;
-        let crouched_state_size = [
-            crouched_state_size_width as f32 / sprite_sheet_width,
-            crouched_state_size_height as f32 / sprite_sheet_height,
-        ];
+        let [crouched_state_size_width, _] = crouched_state_size;
 
         let image_crouched1 =
             Tile::new(crouched_state_start, crouched_state_size, sprite_sheet_size);

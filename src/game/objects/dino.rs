@@ -10,6 +10,8 @@ const BLINKING_INTERVAL: u128 = 2_500_000;
 
 const WALKING_STEP_DURATION: u128 = 100_000;
 
+const DINO_VELOCITY: f32 = 300.0;
+
 struct IdleState {
     since: u128,
     is_blinking: bool,
@@ -97,7 +99,7 @@ impl Dino {
         Dino(DinoState::new())
     }
 
-    pub fn update(&mut self, ctx: &mut Context) {
+    pub(crate) fn update(&mut self, ctx: &mut Context) {
         let dt = timer::delta(ctx);
         let dt_micros = dt.as_micros();
         let dt_float = dt.as_secs_f32();
@@ -345,5 +347,17 @@ impl Dino {
             &assets.sprites.sprite_sheet,
             make_draw_param(hit_tile, draw_context.screen_scale, [100.0, GROUND_LEVEL]),
         )
+    }
+
+    pub(crate) fn velocity(&self) -> f32 {
+        let Dino(ref dino_state) = self;
+
+        match dino_state {
+            DinoState::Idle(_) => 0.0,
+            DinoState::Walking(_) => DINO_VELOCITY,
+            DinoState::Jumping(_) => DINO_VELOCITY,
+            DinoState::Crouched(_) => DINO_VELOCITY,
+            DinoState::Hit => 0.0,
+        }
     }
 }

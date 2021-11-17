@@ -12,15 +12,14 @@ impl Ground {
         position: [f32; 2],
         size: [f32; 2],
     ) -> GameResult<Self> {
-        let [sprite_sheet_width, sprite_sheet_height] = sprite_sheet_size;
         let [start_x, start_y] = position;
-        let [width, height] = size;
+        let [tile_width, _] = size;
 
         let mut ground_data: [MaybeUninit<Tile>; 40] =
             unsafe { MaybeUninit::uninit().assume_init() };
 
         for index in 0..40 {
-            let position = [start_x + width * index as f32, start_y];
+            let position = [start_x + tile_width * index as f32, start_y];
             ground_data[index] = MaybeUninit::new(Tile::new(position, size, sprite_sheet_size));
         }
 
@@ -29,8 +28,8 @@ impl Ground {
         Ok(Ground(ground_data))
     }
 
-    pub fn get_tile(&self, index: usize) -> &Tile {
+    pub fn get_tile(&self, index: usize) -> Tile {
         let Ground(ground_data) = self;
-        &ground_data[index]
+        ground_data[index]
     }
 }

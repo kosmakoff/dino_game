@@ -1,5 +1,6 @@
 use ggez::graphics::Rect;
 
+#[derive(Clone, Copy)]
 pub struct Tile {
     position: [f32; 2],
     size: [f32; 2],
@@ -21,16 +22,16 @@ impl Tile {
         }
     }
 
-    pub fn position(&self) -> &[f32; 2] {
-        &self.position
+    pub fn position(&self) -> [f32; 2] {
+        self.position
     }
 
-    pub fn size(&self) -> &[f32; 2] {
-        &self.size
+    pub fn size(&self) -> [f32; 2] {
+        self.size
     }
 
-    pub fn size_raw(&self) -> &[f32; 2] {
-        &self.size_raw
+    pub fn size_raw(&self) -> [f32; 2] {
+        self.size_raw
     }
 }
 

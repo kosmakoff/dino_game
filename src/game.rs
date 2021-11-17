@@ -59,11 +59,12 @@ impl Game {
         let assets = Assets::new(ctx)?;
         let rng = create_rng()?;
         let (width, height) = graphics::drawable_size(ctx);
+        let ground = Ground::new(&assets);
 
         Ok(Game {
             assets: assets,
             dino: Dino::new(),
-            ground: Ground::new(),
+            ground,
             rng,
             screen_width: width,
             screen_height: height,
@@ -103,12 +104,21 @@ fn make_draw_param(tile: &Tile, scale: [f32; 2], dest: [f32; 2]) -> DrawParam {
 impl EventHandler<ggez::GameError> for Game {
     fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
         let fps = timer::fps(ctx);
+        let dt = timer::delta(ctx);
+        let dt_float = dt.as_secs_f32();
         set_window_title(ctx, &format!("Dino Game - {:.1} FPS", fps));
 
         self.dino.update(ctx);
 
+        let dino_speed = self.dino.velocity();
+        let dino_distance_walked = dino_speed * dt_float;
+
+        self.ground.advance(dino_distance_walked);
+        self.ground.expand(&mut self.rng, &self.assets);
+
         Ok(())
     }
+
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
         const BG_DAY: [f32; 4] = [247.0 / 255.0, 247.0 / 255.0, 247.0 / 255.0, 1.0];
         // const BG_BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];

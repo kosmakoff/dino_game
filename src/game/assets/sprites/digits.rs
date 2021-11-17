@@ -11,7 +11,6 @@ impl Digits {
         size: [f32; 2],
         padding: f32,
     ) -> Self {
-        let [sprite_sheet_width, sprite_sheet_height] = sprite_sheet_size;
         let [width, height] = size;
         let [x, y] = position;
         let size = [width as f32, height as f32];
